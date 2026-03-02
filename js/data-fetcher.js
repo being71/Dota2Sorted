@@ -367,6 +367,18 @@ export async function fetchMatchupItemData(dotaId, enemyDotaIds, position = null
     try {
         const enemyIdsList = enemyDotaIds.join(',');
 
+        // Construct the role-specific SQL filter for pm1 (our hero)
+        let roleFilterSQL = '';
+        if (position) {
+            switch (position) {
+                case 1: roleFilterSQL = 'AND pm1.lane_role = 1 AND pm1.gold_per_min >= 400'; break; // Carry
+                case 2: roleFilterSQL = 'AND pm1.lane_role = 2'; break;                             // Mid
+                case 3: roleFilterSQL = 'AND pm1.lane_role = 3 AND pm1.gold_per_min >= 350'; break; // Offlane
+                case 4: roleFilterSQL = 'AND ((pm1.lane_role = 3 AND pm1.gold_per_min < 350) OR pm1.is_roaming = true)'; break; // Soft Support
+                case 5: roleFilterSQL = 'AND pm1.lane_role = 1 AND pm1.gold_per_min < 400'; break;  // Hard Support
+            }
+        }
+
         // Use Explorer SQL endpoint to get parsed match details including GPM, Lane, and Items.
         // We join player_matches twice:
         // 1. pm1 = the hero we are playing (dotaId)
@@ -381,46 +393,21 @@ SELECT DISTINCT
 FROM matches 
 JOIN player_matches pm1 ON matches.match_id = pm1.match_id
 JOIN player_matches pm2 ON matches.match_id = pm2.match_id
-WHERE pm1.hero_id = ${dotaId}
+JOIN public_matches pm3 ON matches.match_id = pm3.match_id
+WHERE pm1.hero_id = ${dotaId} ${roleFilterSQL}
+  AND pm3.avg_rank_tier >= 60
   AND pm2.hero_id IN (${enemyIdsList})
   AND ((pm1.player_slot < 128) != (pm2.player_slot < 128))
 ORDER BY matches.start_time DESC 
-LIMIT 300
+LIMIT 150
         `.trim().replace(/\s+/g, ' ');
 
         const res = await fetch(`${API_BASE}/explorer?sql=${encodeURIComponent(sql)}`);
         const json = await res.json();
         if (json.err) throw new Error(json.err);
 
-        const allMatches = json.rows || [];
-
-        // Filter by role using lane + GPM from replay data:
-        // Pos 1 (Carry):        Safe lane (1) + high GPM (≥400) = farming core
-        // Pos 2 (Mid):          Mid lane (2)
-        // Pos 3 (Offlane):      Off lane (3) + high GPM (≥350) = offlane core
-        // Pos 4 (Soft Support): Off lane (3) + low GPM (<350), or roaming
-        // Pos 5 (Hard Support): Safe lane (1) + low GPM (<400) = lane support
-        let roleFiltered = allMatches;
-        if (position) {
-            roleFiltered = allMatches.filter(m => {
-                const lane = m.lane;      // 1=safe, 2=mid, 3=off, 4=jungle
-                const gpm = m.gold_per_min || 0;
-                const roaming = m.is_roaming;
-                // If no lane data, fall back to GPM-only
-                if (!lane && !gpm) return true;
-                switch (position) {
-                    case 1: return lane === 1 && gpm >= 400;             // Safelane core
-                    case 2: return lane === 2;                           // Mid
-                    case 3: return lane === 3 && gpm >= 350;             // Offlane core
-                    case 4: return (lane === 3 && gpm < 350) || roaming; // Soft support / roamer
-                    case 5: return lane === 1 && gpm < 400;              // Hard support
-                    default: return true;
-                }
-            });
-        }
-
-        // Take top 150 matches that match the role and the enemy matchup
-        let relevantMatches = roleFiltered.slice(0, 150);
+        // Matches are now 100% role-filtered and matchup-filtered directly from the database
+        const relevantMatches = json.rows || [];
 
         if (relevantMatches.length === 0) return null;
 

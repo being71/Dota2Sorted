@@ -694,20 +694,7 @@
         const LANE_NAMES = { 1: 'Safe', 2: 'Mid', 3: 'Off', 4: 'Jungle' };
         const ROLE_NAMES = { 1: 'Carry', 2: 'Mid', 3: 'Offlane', 4: 'Soft Support', 5: 'Hard Support' };
 
-        function matchesRole(m, pos) {
-            const lane = m.lane;
-            const gpm = m.gold_per_min || 0;
-            const roaming = m.is_roaming;
-            if (!lane && !gpm) return true;
-            switch (pos) {
-                case 1: return lane === 1 && gpm >= 400;
-                case 2: return lane === 2;
-                case 3: return lane === 3 && gpm >= 350;
-                case 4: return (lane === 3 && gpm < 350) || roaming;
-                case 5: return lane === 1 && gpm < 400;
-                default: return true;
-            }
-        }
+        // No longer needed, filtering is done via SQL.
 
         function formatDuration(sec) {
             return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
@@ -731,30 +718,41 @@
             statsBar.innerHTML = '';
 
             try {
-                const limit = matchCountSel.value;
+                const limit = parseInt(matchCountSel.value, 10);
+
+                // Construct the role-specific SQL filter
+                let roleFilterSQL = '';
+                switch (selectedPos) {
+                    case 1: roleFilterSQL = 'AND lane_role = 1 AND gold_per_min >= 400'; break; // Carry
+                    case 2: roleFilterSQL = 'AND lane_role = 2'; break;                         // Mid
+                    case 3: roleFilterSQL = 'AND lane_role = 3 AND gold_per_min >= 350'; break; // Offlane
+                    case 4: roleFilterSQL = 'AND ((lane_role = 3 AND gold_per_min < 350) OR is_roaming = true)'; break; // Soft Support
+                    case 5: roleFilterSQL = 'AND lane_role = 1 AND gold_per_min < 400'; break;  // Hard Support
+                }
+
                 // The default heroes/{id}/matches endpoint lacks GPM/items.
                 // We use the Explorer SQL endpoint to get parsed match details.
                 const sql = `
 SELECT 
-  matches.match_id, duration, start_time, radiant_win, 
-  player_slot, kills, deaths, assists, gold_per_min, xp_per_min, 
-  last_hits, lane, lane_role, is_roaming, 
-  item_0, item_1, item_2, item_3, item_4, item_5
+  matches.match_id, matches.duration, matches.start_time, matches.radiant_win, 
+  pm1.player_slot, pm1.kills, pm1.deaths, pm1.assists, pm1.gold_per_min, pm1.xp_per_min, 
+  pm1.last_hits, pm1.lane, pm1.lane_role, pm1.is_roaming, 
+  pm1.item_0, pm1.item_1, pm1.item_2, pm1.item_3, pm1.item_4, pm1.item_5
 FROM matches 
-JOIN player_matches USING(match_id) 
-WHERE hero_id = ${selectedHero.id}
+JOIN player_matches pm1 ON matches.match_id = pm1.match_id
+JOIN public_matches pm3 ON matches.match_id = pm3.match_id
+WHERE pm1.hero_id = ${selectedHero.id} ${roleFilterSQL.replace(/lane_role/g, 'pm1.lane_role').replace(/gold_per_min/g, 'pm1.gold_per_min').replace(/is_roaming/g, 'pm1.is_roaming')}
+  AND pm3.avg_rank_tier >= 60
 ORDER BY start_time DESC 
-LIMIT ${limit * 2}
+LIMIT ${limit}
                 `.trim().replace(/\s+/g, ' ');
 
                 const res = await fetch(`${API_BASE}/explorer?sql=${encodeURIComponent(sql)}`);
                 const json = await res.json();
                 if (json.err) throw new Error(json.err);
 
-                const allMatches = json.rows || [];
-
-                // Filter by role
-                const matches = allMatches.filter(m => matchesRole(m, selectedPos)).slice(0, limit);
+                // Matches are already role-filtered by the SQL query
+                const matches = json.rows || [];
 
                 // Stats
                 const wins = matches.filter(m => m.radiant_win === (m.player_slot < 128)).length;
@@ -765,8 +763,7 @@ LIMIT ${limit * 2}
                 const wr = matches.length > 0 ? Math.round(wins / matches.length * 100) : 0;
 
                 statsBar.innerHTML = `
-          <div class="stat-chip"><span class="stat-label">Total Fetched</span><span class="stat-value">${allMatches.length}</span></div>
-          <div class="stat-chip"><span class="stat-label">Role Filtered</span><span class="stat-value">${matches.length}</span></div>
+          <div class="stat-chip"><span class="stat-label">Matches</span><span class="stat-value">${matches.length}</span></div>
           <div class="stat-chip"><span class="stat-label">Win Rate</span><span class="stat-value ${wr >= 50 ? 'win' : 'lose'}">${wr}%</span></div>
           <div class="stat-chip"><span class="stat-label">Wins / Losses</span><span class="stat-value"><span class="win">${wins}</span> / <span class="lose">${losses}</span></span></div>
           <div class="stat-chip"><span class="stat-label">Avg GPM</span><span class="stat-value">${avgGpm}</span></div>

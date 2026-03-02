@@ -211,8 +211,8 @@ function renderRolePanel() {
     rolePanel = document.createElement('div');
     rolePanel.id = 'role-panel';
     rolePanel.className = 'role-panel';
-    const allySection = document.querySelector('.team-panel.ally') || allyPanel.parentElement;
-    allySection.parentElement.insertBefore(rolePanel, allySection.nextSibling);
+    const leftCol = document.querySelector('.draft-col-left');
+    leftCol.appendChild(rolePanel);
   }
 
   if (engine.allyPicks.length === 0) {
