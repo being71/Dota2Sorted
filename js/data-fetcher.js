@@ -365,7 +365,7 @@ export async function fetchMatchupItemData(dotaId, enemyDotaIds) {
 
     try {
         // Fetch recent high-MMR matches for this hero
-        const res = await fetch(`${API_BASE}/heroes/${dotaId}/matches?limit=30`);
+        const res = await fetch(`${API_BASE}/heroes/${dotaId}/matches?limit=60`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const matches = await res.json();
 
