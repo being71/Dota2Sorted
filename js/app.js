@@ -376,10 +376,44 @@ function renderRoadmap() {
     </div>`;
   }
 
-  // Data source indicator
+  // Data source indicator with role context
+  const roleSuffix = roadmap.position
+    ? (roadmap.position <= 3 ? ' · Core Build' : ' · Support Build')
+    : '';
   html += `<div class="roadmap-data-source ${roadmap.dataSource}">
-    ${roadmap.dataSource === 'api' ? '📊 Built from real match data (Divine+)' : '📋 Template build (offline)'}
+    ${roadmap.dataSource === 'api' ? `📊 Built from real match data (Divine+)${roleSuffix}` : `📋 Template build (offline)${roleSuffix}`}
   </div>`;
+
+  // ─── Facets ───
+  if (roadmap.facets?.length) {
+    html += `<div class="roadmap-section facets-section">
+      <h4>💠 FACETS</h4>
+      <div class="facets-grid">
+        ${roadmap.facets.map(f => `
+          <div class="facet-card facet-${f.color}">
+            <div class="facet-title">${f.title}</div>
+            <div class="facet-desc">${f.description}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ─── Talent Tree ───
+  if (roadmap.talents?.length) {
+    html += `<div class="roadmap-section talent-section">
+      <h4>🌟 TALENT TREE</h4>
+      <div class="talent-tree">
+        ${roadmap.talents.slice().reverse().map(tier => `
+          <div class="talent-tier">
+            <div class="talent-left">${tier.left}</div>
+            <div class="talent-level">Lv ${tier.level}</div>
+            <div class="talent-right">${tier.right}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }
 
   if (roadmap.dataSource === 'api') {
     // Render API-driven item phases
@@ -457,6 +491,9 @@ function renderRoadmap() {
     </div>`;
   }
 
+  // Matchup items placeholder (populated async)
+  html += `<div id="matchup-items-section"></div>`;
+
   // Tips
   if (roadmap.tips?.length) {
     html += `<div class="roadmap-section tips">
@@ -466,6 +503,27 @@ function renderRoadmap() {
   }
 
   roadmapContent.innerHTML = html;
+
+  // Async: fetch matchup items if enemies are picked
+  if (engine.enemyPicks.length > 0 && selectedRoadmapHero) {
+    engine.fetchMatchupItems(selectedRoadmapHero).then(matchupItems => {
+      const container = document.getElementById('matchup-items-section');
+      if (!container || !matchupItems?.length) return;
+      container.innerHTML = `<div class="roadmap-section matchup-items">
+        <h4>📊 MATCHUP ITEMS (vs Enemy Heroes)</h4>
+        <div class="matchup-items-note">Items popular in matches against current enemies</div>
+        <div class="item-row api-items">
+          ${matchupItems.map(item => `
+            <div class="item-chip api-item matchup-item" title="${item.name} — ${Math.round(item.winRate * 100)}% WR in ${item.matchCount} matches">
+              <img src="${item.img || ''}" onerror="this.style.display='none'">
+              <span class="api-item-name">${item.name}</span>
+              <span class="matchup-wr ${item.winRate >= 0.5 ? 'win' : 'lose'}">${Math.round(item.winRate * 100)}%</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    });
+  }
 }
 
 // ─── Render API item phase ──────────────────────────────────

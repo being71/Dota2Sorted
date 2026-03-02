@@ -8,6 +8,9 @@ const CACHE_KEY_STATS = 'dota2_hero_stats';
 const CACHE_KEY_MATCHUPS = 'dota2_hero_matchups';
 const CACHE_KEY_ITEM_POP = 'dota2_item_popularity';
 const CACHE_KEY_ITEM_CONST = 'dota2_item_constants';
+const CACHE_KEY_HERO_ABILITIES = 'dota2_hero_abilities';
+const CACHE_KEY_ABILITY_DATA = 'dota2_ability_data';
+const CACHE_KEY_MATCHUP_ITEMS = 'dota2_matchup_items';
 
 // Status: 'loading' | 'live' | 'cached' | 'offline'
 let dataStatus = 'loading';
@@ -15,6 +18,9 @@ let heroStatsData = null;
 let heroMatchupsCache = {};
 let itemPopularityCache = {};
 let itemConstantsData = null;
+let heroAbilitiesData = null;   // hero_abilities: talents + facets per hero
+let abilityDisplayData = null;  // abilities: talent key → display name
+let matchupItemsCache = {};     // dotaId → matchup item frequency data
 let statusListeners = [];
 
 // ─── Cache helpers ──────────────────────────────────────────
@@ -257,6 +263,160 @@ export function getItemBuild(dotaId) {
     };
 }
 
+// ─── Fetch hero abilities (talents + facets per hero) ────────
+export async function fetchHeroAbilities() {
+    // Try cache first
+    const cachedAbilities = getCached(CACHE_KEY_HERO_ABILITIES);
+    const cachedDisplay = getCached(CACHE_KEY_ABILITY_DATA);
+    if (cachedAbilities && cachedDisplay) {
+        heroAbilitiesData = cachedAbilities;
+        abilityDisplayData = cachedDisplay;
+        return;
+    }
+
+    try {
+        const [abilitiesRes, heroAbilitiesRes] = await Promise.all([
+            fetch(`${API_BASE}/constants/abilities`),
+            fetch(`${API_BASE}/constants/hero_abilities`)
+        ]);
+        if (!abilitiesRes.ok || !heroAbilitiesRes.ok) throw new Error('HTTP error');
+
+        const abilitiesRaw = await abilitiesRes.json();
+        const heroAbilitiesRaw = await heroAbilitiesRes.json();
+
+        // Build talent display name map: key → display name
+        const displayMap = {};
+        for (const [key, val] of Object.entries(abilitiesRaw)) {
+            if (key.startsWith('special_bonus_') && val.dname) {
+                displayMap[key] = val.dname;
+            }
+        }
+        abilityDisplayData = displayMap;
+        setCache(CACHE_KEY_ABILITY_DATA, displayMap);
+
+        heroAbilitiesData = heroAbilitiesRaw;
+        setCache(CACHE_KEY_HERO_ABILITIES, heroAbilitiesRaw);
+    } catch (err) {
+        console.warn('[DataFetcher] Failed to fetch hero abilities:', err.message);
+    }
+}
+
+// ─── Clean up talent display names ──────────────────────────
+function cleanTalentName(rawKey, displayName) {
+    if (displayName) {
+        // Strip parameterized placeholders like {s:value}, {sbonus_...}
+        return displayName.replace(/\{[^}]+\}/g, '').replace(/\s+/g, ' ').trim();
+    }
+    // Fallback: convert key to readable text
+    // "special_bonus_unique_lion_5" → "Unique Lion 5"
+    // "special_bonus_hp_200" → "HP 200" → "+200 Health"
+    let clean = rawKey
+        .replace(/^special_bonus_/, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+    return clean || rawKey;
+}
+
+// ─── Get talent tree for a hero (4 tiers × 2 choices) ────────
+export function getHeroTalents(heroInternalName) {
+    if (!heroAbilitiesData || !abilityDisplayData) return null;
+    const heroKey = `npc_dota_hero_${heroInternalName}`;
+    const heroData = heroAbilitiesData[heroKey];
+    if (!heroData || !heroData.talents) return null;
+
+    // Group into tiers (level 1=Lv10, 2=Lv15, 3=Lv20, 4=Lv25)
+    const tierLabels = { 1: 10, 2: 15, 3: 20, 4: 25 };
+    const tiers = [];
+    for (let lvl = 1; lvl <= 4; lvl++) {
+        const pair = heroData.talents.filter(t => t.level === lvl);
+        if (pair.length >= 2) {
+            tiers.push({
+                level: tierLabels[lvl],
+                left: cleanTalentName(pair[0].name, abilityDisplayData[pair[0].name]),
+                right: cleanTalentName(pair[1].name, abilityDisplayData[pair[1].name])
+            });
+        }
+    }
+    return tiers.length > 0 ? tiers : null;
+}
+
+// ─── Get facets for a hero (non-deprecated only) ─────────────
+export function getHeroFacets(heroInternalName) {
+    if (!heroAbilitiesData) return null;
+    const heroKey = `npc_dota_hero_${heroInternalName}`;
+    const heroData = heroAbilitiesData[heroKey];
+    if (!heroData || !heroData.facets) return null;
+
+    return heroData.facets
+        .filter(f => !f.deprecated && f.title && f.description)
+        .map(f => ({
+            title: f.title,
+            description: f.description,
+            color: (f.color || 'Gray').toLowerCase(),
+            icon: f.icon || 'default'
+        }));
+}
+
+// ─── Fetch matchup-specific item data from recent matches ────
+export async function fetchMatchupItemData(dotaId, enemyDotaIds) {
+    if (!dotaId || !enemyDotaIds?.length) return null;
+    const cacheKey = `${dotaId}_vs_${enemyDotaIds.sort().join('_')}`;
+    if (matchupItemsCache[cacheKey]) return matchupItemsCache[cacheKey];
+
+    try {
+        // Fetch recent high-MMR matches for this hero
+        const res = await fetch(`${API_BASE}/heroes/${dotaId}/matches?limit=30`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const matches = await res.json();
+
+        // Filter matches where at least one enemy is present
+        const enemySet = new Set(enemyDotaIds);
+        const relevantMatches = matches.filter(m => {
+            // Match has hero_id matching our hero and against_hero_id in enemy list
+            return m.against_hero_id && enemySet.has(m.against_hero_id);
+        });
+
+        if (relevantMatches.length === 0) return null;
+
+        // Count item purchases across relevant matches
+        const itemFreq = {};
+        const itemSlots = ['item_0', 'item_1', 'item_2', 'item_3', 'item_4', 'item_5'];
+        for (const match of relevantMatches) {
+            for (const slot of itemSlots) {
+                const itemId = match[slot];
+                if (itemId && itemId > 0 && itemConstantsData?.[itemId]) {
+                    const item = itemConstantsData[itemId];
+                    if (item.cost >= 1000) { // Only meaningful items
+                        if (!itemFreq[itemId]) {
+                            itemFreq[itemId] = { id: itemId, count: 0, wins: 0, ...item };
+                        }
+                        itemFreq[itemId].count++;
+                        if (match.radiant_win === (match.player_slot < 128)) {
+                            itemFreq[itemId].wins++;
+                        }
+                    }
+                }
+            }
+        }
+
+        const result = Object.values(itemFreq)
+            .filter(i => i.count >= 2) // At least bought twice
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8)
+            .map(i => ({
+                ...i,
+                winRate: i.wins / i.count,
+                matchCount: relevantMatches.length
+            }));
+
+        matchupItemsCache[cacheKey] = result;
+        return result;
+    } catch (err) {
+        console.warn(`[DataFetcher] Failed to fetch matchup items for hero ${dotaId}:`, err.message);
+        return null;
+    }
+}
+
 // ─── Get cached data ────────────────────────────────────────
 export function getHeroStats() { return heroStatsData; }
 export function getItemConstants() { return itemConstantsData; }
@@ -279,11 +439,12 @@ export async function prefetchMatchups(dotaIds) {
     await Promise.allSettled(promises);
 }
 
-// ─── Initialize: fetch hero stats + item constants on load ──
+// ─── Initialize: fetch hero stats + item constants + abilities on load ──
 export async function initDataFetcher() {
     await Promise.allSettled([
         fetchHeroStats(),
-        fetchItemConstants()
+        fetchItemConstants(),
+        fetchHeroAbilities()
     ]);
     return heroStatsData;
 }

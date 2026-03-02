@@ -12,8 +12,28 @@ import {
     getDataStatus,
     getItemBuild,
     getItemConstants,
-    fetchItemPopularity
+    fetchItemPopularity,
+    getHeroTalents,
+    getHeroFacets,
+    fetchMatchupItemData
 } from './data-fetcher.js';
+
+// ─── Role-based Item Filtering ──────────────────────────────
+// Items that supports buy but cores should deprioritize
+const SUPPORT_ITEM_KEYS = new Set([
+    'glimmer_cape', 'force_staff', 'aether_lens', 'ghost',
+    'holy_locket', 'pavise', 'solar_crest', 'medallion_of_courage',
+    'urn_of_shadows', 'spirit_vessel', 'mekansm', 'guardian_greaves',
+    'arcane_boots', 'tranquil_boots', 'aeon_disk',
+]);
+// Items that cores buy but supports should deprioritize
+const CORE_ITEM_KEYS = new Set([
+    'battlefury', 'radiance', 'mjollnir', 'maelstrom', 'desolator',
+    'satanic', 'butterfly', 'daedalus', 'rapier', 'abyssal_blade',
+    'monkey_king_bar', 'skadi', 'disperser', 'manta', 'diffusal_blade',
+    'sange_and_yasha', 'greater_crit', 'lesser_crit',
+    'mask_of_madness', 'echo_sabre', 'armlet', 'hand_of_midas',
+]);
 
 // ─── Scoring Weights ────────────────────────────────────────
 const W = {
@@ -395,22 +415,39 @@ export class AIEngine {
         const tips = this.generateGameTips(allyHeroId);
         const pos = this.roleAssignments[allyHeroId] || null;
 
+        // Talent & Facet data
+        const internalName = hero.img || hero.id;
+        const talents = getHeroTalents(internalName);
+        const facets = getHeroFacets(internalName);
+
         // Try real API data first
         const apiBuild = hero.dotaId ? getItemBuild(hero.dotaId) : null;
 
         if (apiBuild && (apiBuild.midItems.length > 0 || apiBuild.earlyItems.length > 0)) {
-            // Use real OpenDota item popularity data
             const situational = this.getSituationalFromTags(enemyTags);
+
+            // Role-dependent filtering
+            let { startItems, earlyItems, midItems: coreItems, lateItems } = apiBuild;
+            if (pos) {
+                const isCore = pos <= 3;
+                const filterSet = isCore ? SUPPORT_ITEM_KEYS : CORE_ITEM_KEYS;
+                const filterFn = (items) => items.filter(item => !filterSet.has(item.key));
+                // Only filter mid/late phases — start/early are universal
+                coreItems = filterFn(coreItems);
+                lateItems = filterFn(lateItems);
+            }
 
             return {
                 hero,
                 position: pos,
                 dataSource: 'api',
-                startItems: apiBuild.startItems,
-                earlyItems: apiBuild.earlyItems,
-                coreItems: apiBuild.midItems,
-                lateItems: apiBuild.lateItems,
+                startItems,
+                earlyItems,
+                coreItems,
+                lateItems,
                 situational,
+                talents,
+                facets,
                 tips,
             };
         }
@@ -428,8 +465,21 @@ export class AIEngine {
             luxury: build.luxury,
             situational,
             timings: build.timings || {},
+            talents,
+            facets,
             tips,
         };
+    }
+
+    // ─── Fetch matchup-specific items (async, called from UI) ─────
+    async fetchMatchupItems(allyHeroId) {
+        const hero = HERO_MAP[allyHeroId];
+        if (!hero?.dotaId || this.enemyPicks.length === 0) return null;
+        const enemyDotaIds = this.enemyPicks
+            .map(id => HERO_MAP[id]?.dotaId)
+            .filter(Boolean);
+        if (enemyDotaIds.length === 0) return null;
+        return await fetchMatchupItemData(hero.dotaId, enemyDotaIds);
     }
 
     // ─── Situational items from enemy tags (overlay on API data) ──
