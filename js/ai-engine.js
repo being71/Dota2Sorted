@@ -25,6 +25,8 @@ const SUPPORT_ITEM_KEYS = new Set([
     'holy_locket', 'pavise', 'solar_crest', 'medallion_of_courage',
     'urn_of_shadows', 'spirit_vessel', 'mekansm', 'guardian_greaves',
     'arcane_boots', 'tranquil_boots', 'aeon_disk',
+    // Early / Start phase
+    'ward_observer', 'ward_sentry', 'smoke_of_deceit', 'dust', 'blood_grenade', 'ward_dispenser', 'gem'
 ]);
 // Items that cores buy but supports should deprioritize
 const CORE_ITEM_KEYS = new Set([
@@ -33,6 +35,9 @@ const CORE_ITEM_KEYS = new Set([
     'monkey_king_bar', 'skadi', 'disperser', 'manta', 'diffusal_blade',
     'sange_and_yasha', 'greater_crit', 'lesser_crit',
     'mask_of_madness', 'echo_sabre', 'armlet', 'hand_of_midas',
+    // Early / Start phase
+    'quelling_blade', 'orb_of_venom', 'blight_stone', 'phase_boots', 'power_treads',
+    'wraith_band', 'bracer', 'null_talisman'
 ]);
 
 // ─── Scoring Weights ────────────────────────────────────────
@@ -432,9 +437,35 @@ export class AIEngine {
                 const isCore = pos <= 3;
                 const filterSet = isCore ? SUPPORT_ITEM_KEYS : CORE_ITEM_KEYS;
                 const filterFn = (items) => items.filter(item => !filterSet.has(item.key));
-                // Only filter mid/late phases — start/early are universal
+
+                // Filter all phases
+                startItems = filterFn(startItems);
+                earlyItems = filterFn(earlyItems);
                 coreItems = filterFn(coreItems);
                 lateItems = filterFn(lateItems);
+
+                // Inject fallback role items if filtering left them dry (e.g. off-role picks)
+                const injectItems = (list, keys) => {
+                    keys.forEach(k => {
+                        if (!list.some(i => i.key === k) && ITEMS[k]) {
+                            list.push({
+                                key: k,
+                                name: ITEMS[k].name,
+                                cost: ITEMS[k].cost,
+                                img: `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/items/${k}.png`
+                            });
+                        }
+                    });
+                };
+
+                if (isCore) {
+                    const statItem = hero.attr === 'agi' ? 'wraith_band' : (hero.attr === 'int' ? 'null_talisman' : 'bracer');
+                    if (startItems.length < 3) injectItems(startItems, ['tango', 'quelling_blade', 'iron_branch']);
+                    if (earlyItems.length < 2) injectItems(earlyItems, ['magic_wand', 'boots', statItem]);
+                } else {
+                    if (startItems.length < 3) injectItems(startItems, ['tango', 'ward_observer', 'ward_sentry', 'blood_grenade']);
+                    if (earlyItems.length < 2) injectItems(earlyItems, ['magic_wand', 'boots', 'wind_lace']);
+                }
             }
 
             return {
@@ -479,7 +510,8 @@ export class AIEngine {
             .map(id => HERO_MAP[id]?.dotaId)
             .filter(Boolean);
         if (enemyDotaIds.length === 0) return null;
-        return await fetchMatchupItemData(hero.dotaId, enemyDotaIds);
+        const pos = this.roleAssignments[allyHeroId] || null;
+        return await fetchMatchupItemData(hero.dotaId, enemyDotaIds, pos);
     }
 
     // ─── Situational items from enemy tags (overlay on API data) ──

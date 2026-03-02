@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dota 2 Match Explorer — By Hero & Role</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0a0e17;
+            --bg-card: #111827;
+            --bg-surface: #1a2234;
+            --bg-hover: #243044;
+            --border: rgba(255, 255, 255, 0.06);
+            --text: #e2e8f0;
+            --text-dim: rgba(255, 255, 255, 0.5);
+            --accent-green: #4ade80;
+            --accent-red: #f87171;
+            --accent-amber: #fbbf24;
+            --accent-blue: #60a5fa;
+            --accent-purple: #c084fc;
+            --accent-cyan: #22d3ee;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-main);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ─── Header ─── */
+        .header {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(10, 14, 23, 0.98));
+            border-bottom: 1px solid var(--border);
+            padding: 1.25rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header .subtitle {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .header .back-link {
+            margin-left: auto;
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .header .back-link:hover {
+            opacity: 1;
+        }
+
+        /* ─── Controls ─── */
+        .controls {
+            max-width: 1200px;
+            margin: 1.5rem auto;
+            padding: 0 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .control-group label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+        }
+
+        .hero-search {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            color: var(--text);
+            font-size: 0.85rem;
+            width: 280px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .hero-search:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .hero-dropdown {
+            position: relative;
+        }
+
+        .hero-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .hero-results.show {
+            display: block;
+        }
+
+        .hero-result {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 0.8rem;
+        }
+
+        .hero-result:hover {
+            background: var(--bg-hover);
+        }
+
+        .hero-result img {
+            width: 40px;
+            height: 22px;
+            border-radius: 3px;
+            object-fit: cover;
+        }
+
+        /* ─── Role Buttons ─── */
+        .role-buttons {
+            display: flex;
+            gap: 0.3rem;
+        }
+
+        .role-btn {
+            padding: 0.5rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-surface);
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.72rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .role-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+        }
+
+        .role-btn.active {
+            background: var(--accent-blue);
+            color: #000;
+            border-color: var(--accent-blue);
+        }
+
+        .fetch-btn {
+            padding: 0.55rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: #000;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 700;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.5px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .fetch-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .fetch-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .match-count-selector {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.55rem 0.75rem;
+            color: var(--text);
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+        }
+
+        /* ─── Stats Bar ─── */
+        .stats-bar {
+            max-width: 1200px;
+            margin: 1rem auto;
+            padding: 0 1.5rem;
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-chip {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            min-width: 120px;
+        }
+
+        .stat-chip .stat-label {
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+        }
+
+        .stat-chip .stat-value {
+            font-size: 1.1rem;
+            font-weight: 800;
+        }
+
+        .stat-chip .stat-value.win {
+            color: var(--accent-green);
+        }
+
+        .stat-chip .stat-value.lose {
+            color: var(--accent-red);
+        }
+
+        /* ─── Content Panels ─── */
+        .content {
+            max-width: 1200px;
+            margin: 1rem auto 2rem;
+            padding: 0 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1rem;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-amber);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* ─── Match Table ─── */
+        .match-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .match-table th {
+            background: var(--bg-surface);
+            padding: 0.5rem 0.6rem;
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .match-table td {
+            padding: 0.45rem 0.6rem;
+            font-size: 0.72rem;
+            border-top: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        .match-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .match-table .win {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .match-table .loss {
+            color: var(--accent-red);
+            font-weight: 600;
+        }
+
+        .match-table .kda {
+            font-weight: 600;
+        }
+
+        .match-table .item-icons {
+            display: flex;
+            gap: 2px;
+        }
+
+        .match-table .item-icons img {
+            width: 28px;
+            height: 20px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .match-scroll {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .match-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .match-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .lane-badge {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .lane-1 {
+            background: rgba(74, 222, 128, 0.12);
+            color: var(--accent-green);
+        }
+
+        .lane-2 {
+            background: rgba(251, 191, 36, 0.12);
+            color: var(--accent-amber);
+        }
+
+        .lane-3 {
+            background: rgba(248, 113, 113, 0.12);
+            color: var(--accent-red);
+        }
+
+        .lane-4 {
+            background: rgba(192, 132, 252, 0.12);
+            color: var(--accent-purple);
+        }
+
+        /* ─── Item Frequency Panel ─── */
+        .item-freq {
+            padding: 0.5rem;
+        }
+
+        .freq-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 0.5rem;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+
+        .freq-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .freq-item img {
+            width: 36px;
+            height: 26px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .freq-item .freq-info {
+            flex: 1;
+        }
+
+        .freq-item .freq-name {
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        .freq-item .freq-meta {
+            font-size: 0.58rem;
+            color: var(--text-dim);
+        }
+
+        .freq-item .freq-bar-bg {
+            width: 60px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .freq-item .freq-bar {
+            height: 100%;
+            border-radius: 3px;
+            background: var(--accent-cyan);
+        }
+
+        .freq-item .freq-wr {
+            font-size: 0.65rem;
+            font-weight: 700;
+            min-width: 36px;
+            text-align: right;
+        }
+
+        .freq-item .freq-wr.good {
+            color: var(--accent-green);
+        }
+
+        .freq-item .freq-wr.bad {
+            color: var(--accent-red);
+        }
+
+        /* ─── Loading & Empty ─── */
+        .loading,
+        .empty-state {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-dim);
+        }
+
+        .loading {
+            font-size: 0.85rem;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            font-size: 0.8rem;
+        }
+
+        /* ─── Selected Hero Card ─── */
+        .selected-hero {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-surface);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+        }
+
+        .selected-hero img {
+            width: 64px;
+            height: 36px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        .selected-hero .hero-name {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .selected-hero .hero-meta {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+        }
+
+        @media (max-width: 900px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .hero-search {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div>
+            <h1>🔍 MATCH EXPLORER</h1>
+            <div class="subtitle">Browse matches by hero & role</div>
+        </div>
+        <a href="index.html" class="back-link">← Back to Draft AI</a>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Hero</label>
+            <div class="hero-dropdown">
+                <input type="text" class="hero-search" id="hero-search" placeholder="Search hero..." autocomplete="off">
+                <div class="hero-results" id="hero-results"></div>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Role / Position</label>
+            <div class="role-buttons" id="role-buttons">
+                <button class="role-btn" data-pos="1">Pos 1<br><small>Carry</small></button>
+                <button class="role-btn" data-pos="2">Pos 2<br><small>Mid</small></button>
+                <button class="role-btn" data-pos="3">Pos 3<br><small>Offlane</small></button>
+                <button class="role-btn" data-pos="4">Pos 4<br><small>Soft Sup</small></button>
+                <button class="role-btn" data-pos="5">Pos 5<br><small>Hard Sup</small></button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Matches</label>
+            <select class="match-count-selector" id="match-count">
+                <option value="30">30</option>
+                <option value="60" selected>60</option>
+                <option value="100">100</option>
+                <option value="150">150</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>&nbsp;</label>
+            <button class="fetch-btn" id="fetch-btn" disabled>Fetch Matches</button>
+        </div>
+    </div>
+
+    <div class="stats-bar" id="stats-bar"></div>
+
+    <div class="content" id="content" style="display:none;">
+        <div class="panel">
+            <div class="panel-header">📋 Match History</div>
+            <div class="match-scroll" id="match-list">
+                <div class="empty-state">Select a hero and role, then click Fetch</div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-header">📊 Popular Items (This Role)</div>
+            <div class="item-freq" id="item-freq">
+                <div class="empty-state">No data yet</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const API_BASE = 'https://api.opendota.com/api';
+
+        // ─── State ───
+        let allHeroes = [];
+        let itemConstants = {};
+        let selectedHero = null;
+        let selectedPos = null;
+
+        // ─── DOM ───
+        const heroSearch = document.getElementById('hero-search');
+        const heroResults = document.getElementById('hero-results');
+        const roleBtns = document.querySelectorAll('.role-btn');
+        const fetchBtn = document.getElementById('fetch-btn');
+        const matchCountSel = document.getElementById('match-count');
+        const statsBar = document.getElementById('stats-bar');
+        const content = document.getElementById('content');
+        const matchList = document.getElementById('match-list');
+        const itemFreq = document.getElementById('item-freq');
+
+        // ─── Init: load heroes + items ───
+        async function init() {
+            const [heroRes, itemRes] = await Promise.all([
+                fetch(`${API_BASE}/heroStats`),
+                fetch(`${API_BASE}/constants/items`)
+            ]);
+            allHeroes = await heroRes.json();
+            const rawItems = await itemRes.json();
+            for (const [key, item] of Object.entries(rawItems)) {
+                if (item.id && item.dname && !key.startsWith('recipe_')) {
+                    itemConstants[item.id] = {
+                        key, name: item.dname, cost: item.cost || 0,
+                        img: item.img ? `https://cdn.cloudflare.steamstatic.com${item.img}` : null
+                    };
+                }
+            }
+        }
+        init();
+
+        // ─── Hero Search ───
+        heroSearch.addEventListener('input', () => {
+            const q = heroSearch.value.toLowerCase().trim();
+            if (!q || q.length < 2) { heroResults.classList.remove('show'); return; }
+            const matches = allHeroes.filter(h =>
+                h.localized_name.toLowerCase().includes(q)
+            ).slice(0, 10);
+            heroResults.innerHTML = matches.map(h => `
+        <div class="hero-result" data-id="${h.id}" data-name="${h.localized_name}">
+          <img src="https://cdn.cloudflare.steamstatic.com${h.img}" onerror="this.style.display='none'">
+          <span>${h.localized_name}</span>
+        </div>
+      `).join('');
+            heroResults.classList.add('show');
+        });
+
+        heroResults.addEventListener('click', e => {
+            const el = e.target.closest('.hero-result');
+            if (!el) return;
+            selectedHero = allHeroes.find(h => h.id === parseInt(el.dataset.id));
+            heroSearch.value = el.dataset.name;
+            heroResults.classList.remove('show');
+            updateFetchBtn();
+        });
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.hero-dropdown')) heroResults.classList.remove('show');
+        });
+
+        // ─── Role Selection ───
+        roleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                roleBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedPos = parseInt(btn.dataset.pos);
+                updateFetchBtn();
+            });
+        });
+
+        function updateFetchBtn() {
+            fetchBtn.disabled = !(selectedHero && selectedPos);
+        }
+
+        // ─── Lane/Role helpers ───
+        const LANE_NAMES = { 1: 'Safe', 2: 'Mid', 3: 'Off', 4: 'Jungle' };
+        const ROLE_NAMES = { 1: 'Carry', 2: 'Mid', 3: 'Offlane', 4: 'Soft Support', 5: 'Hard Support' };
+
+        function matchesRole(m, pos) {
+            const lane = m.lane;
+            const gpm = m.gold_per_min || 0;
+            const roaming = m.is_roaming;
+            if (!lane && !gpm) return true;
+            switch (pos) {
+                case 1: return lane === 1 && gpm >= 400;
+                case 2: return lane === 2;
+                case 3: return lane === 3 && gpm >= 350;
+                case 4: return (lane === 3 && gpm < 350) || roaming;
+                case 5: return lane === 1 && gpm < 400;
+                default: return true;
+            }
+        }
+
+        function formatDuration(sec) {
+            return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
+        }
+
+        function timeAgo(timestamp) {
+            const diff = Date.now() / 1000 - timestamp;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        // ─── Fetch & Render ───
+        fetchBtn.addEventListener('click', async () => {
+            if (!selectedHero || !selectedPos) return;
+            fetchBtn.disabled = true;
+            fetchBtn.textContent = 'Fetching...';
+            content.style.display = 'grid';
+            matchList.innerHTML = `<div class="loading"><div class="spinner"></div>Fetching matches for ${selectedHero.localized_name} as ${ROLE_NAMES[selectedPos]}...</div>`;
+            itemFreq.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+            statsBar.innerHTML = '';
+
+            try {
+                const limit = matchCountSel.value;
+                // The default heroes/{id}/matches endpoint lacks GPM/items.
+                // We use the Explorer SQL endpoint to get parsed match details.
+                const sql = `
+SELECT 
+  matches.match_id, duration, start_time, radiant_win, 
+  player_slot, kills, deaths, assists, gold_per_min, xp_per_min, 
+  last_hits, lane, lane_role, is_roaming, 
+  item_0, item_1, item_2, item_3, item_4, item_5
+FROM matches 
+JOIN player_matches USING(match_id) 
+WHERE hero_id = ${selectedHero.id}
+ORDER BY start_time DESC 
+LIMIT ${limit * 2}
+                `.trim().replace(/\s+/g, ' ');
+
+                const res = await fetch(`${API_BASE}/explorer?sql=${encodeURIComponent(sql)}`);
+                const json = await res.json();
+                if (json.err) throw new Error(json.err);
+
+                const allMatches = json.rows || [];
+
+                // Filter by role
+                const matches = allMatches.filter(m => matchesRole(m, selectedPos)).slice(0, limit);
+
+                // Stats
+                const wins = matches.filter(m => m.radiant_win === (m.player_slot < 128)).length;
+                const losses = matches.length - wins;
+                const avgGpm = matches.length > 0 ? Math.round(matches.reduce((s, m) => s + (m.gold_per_min || 0), 0) / matches.length) : 0;
+                const avgXpm = matches.length > 0 ? Math.round(matches.reduce((s, m) => s + (m.xp_per_min || 0), 0) / matches.length) : 0;
+                const avgDuration = matches.length > 0 ? Math.round(matches.reduce((s, m) => s + (m.duration || 0), 0) / matches.length) : 0;
+                const wr = matches.length > 0 ? Math.round(wins / matches.length * 100) : 0;
+
+                statsBar.innerHTML = `
+          <div class="stat-chip"><span class="stat-label">Total Fetched</span><span class="stat-value">${allMatches.length}</span></div>
+          <div class="stat-chip"><span class="stat-label">Role Filtered</span><span class="stat-value">${matches.length}</span></div>
+          <div class="stat-chip"><span class="stat-label">Win Rate</span><span class="stat-value ${wr >= 50 ? 'win' : 'lose'}">${wr}%</span></div>
+          <div class="stat-chip"><span class="stat-label">Wins / Losses</span><span class="stat-value"><span class="win">${wins}</span> / <span class="lose">${losses}</span></span></div>
+          <div class="stat-chip"><span class="stat-label">Avg GPM</span><span class="stat-value">${avgGpm}</span></div>
+          <div class="stat-chip"><span class="stat-label">Avg XPM</span><span class="stat-value">${avgXpm}</span></div>
+          <div class="stat-chip"><span class="stat-label">Avg Duration</span><span class="stat-value">${formatDuration(avgDuration)}</span></div>
+        `;
+
+                // Match table
+                if (matches.length === 0) {
+                    matchList.innerHTML = `<div class="empty-state">No matches found for ${selectedHero.localized_name} as ${ROLE_NAMES[selectedPos]}.<br><br>Try increasing the match count or selecting a different role.</div>`;
+                } else {
+                    const itemSlots = ['item_0', 'item_1', 'item_2', 'item_3', 'item_4', 'item_5'];
+                    matchList.innerHTML = `<table class="match-table">
+            <thead><tr>
+              <th>Result</th>
+              <th>K/D/A</th>
+              <th>GPM</th>
+              <th>XPM</th>
+              <th>LH</th>
+              <th>Lane</th>
+              <th>Items</th>
+              <th>Duration</th>
+              <th>When</th>
+            </tr></thead>
+            <tbody>${matches.map(m => {
+                        const won = m.radiant_win === (m.player_slot < 128);
+                        const items = itemSlots.map(s => m[s]).filter(id => id && id > 0 && itemConstants[id]);
+                        const laneCls = `lane-${m.lane || 0}`;
+                        return `<tr>
+                <td class="${won ? 'win' : 'loss'}">${won ? 'Won' : 'Lost'}</td>
+                <td class="kda">${m.kills || 0}/${m.deaths || 0}/${m.assists || 0}</td>
+                <td>${m.gold_per_min || '—'}</td>
+                <td>${m.xp_per_min || '—'}</td>
+                <td>${m.last_hits || '—'}</td>
+                <td><span class="lane-badge ${laneCls}">${LANE_NAMES[m.lane] || '?'}</span></td>
+                <td><div class="item-icons">${items.map(id =>
+                            `<img src="${itemConstants[id].img}" title="${itemConstants[id].name}" onerror="this.style.display='none'">`
+                        ).join('')}</div></td>
+                <td>${formatDuration(m.duration || 0)}</td>
+                <td style="font-size:0.6rem;color:var(--text-dim)">${m.start_time ? timeAgo(m.start_time) : '—'}</td>
+              </tr>`;
+                    }).join('')}</tbody>
+          </table>`;
+                }
+
+                // Item frequency
+                const freqMap = {};
+                const itemSlots = ['item_0', 'item_1', 'item_2', 'item_3', 'item_4', 'item_5'];
+                for (const m of matches) {
+                    const won = m.radiant_win === (m.player_slot < 128);
+                    for (const s of itemSlots) {
+                        const id = m[s];
+                        if (id && id > 0 && itemConstants[id] && itemConstants[id].cost >= 500) {
+                            if (!freqMap[id]) freqMap[id] = { ...itemConstants[id], id, count: 0, wins: 0 };
+                            freqMap[id].count++;
+                            if (won) freqMap[id].wins++;
+                        }
+                    }
+                }
+                const sorted = Object.values(freqMap).sort((a, b) => b.count - a.count).slice(0, 20);
+                const maxCount = sorted.length > 0 ? sorted[0].count : 1;
+
+                if (sorted.length === 0) {
+                    itemFreq.innerHTML = `<div class="empty-state">No item data available</div>`;
+                } else {
+                    itemFreq.innerHTML = sorted.map(item => {
+                        const wr = Math.round(item.wins / item.count * 100);
+                        return `<div class="freq-item">
+              <img src="${item.img}" onerror="this.style.display='none'">
+              <div class="freq-info">
+                <div class="freq-name">${item.name}</div>
+                <div class="freq-meta">${item.count}× picked · ${item.cost}g</div>
+              </div>
+              <div class="freq-bar-bg"><div class="freq-bar" style="width:${(item.count / maxCount) * 100}%"></div></div>
+              <div class="freq-wr ${wr >= 50 ? 'good' : 'bad'}">${wr}%</div>
+            </div>`;
+                    }).join('');
+                }
+
+            } catch (err) {
+                matchList.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+            }
+
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = 'Fetch Matches';
+        });
+    </script>
+</body>
+
+</html>
