@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dota 2 AI Draft Assistant - Get hero pick recommendations and item build roadmaps based on team compositions">
+  <title>Dota 2 AI Draft Assistant</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">⚔️</div>
+        <div>
+          <h1>DRAFT AI</h1>
+          <div class="logo-subtitle">Dota 2 Pick Assistant</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-reset" id="btn-reset">🔄 Reset Draft</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP -->
+  <main class="app-container">
+
+    <!-- Team Select & Pick Mode -->
+    <div class="team-select-bar">
+      <span class="label">Pick Mode:</span>
+      <button class="btn btn-radiant active" id="btn-ally-pick">🟢 Ally Pick</button>
+      <button class="btn btn-dire" id="btn-enemy-pick">🔴 Enemy Pick</button>
+      <div class="pick-mode-indicator ally" id="pick-mode">
+        🟢 Picking for <strong>YOUR</strong> team
+      </div>
+    </div>
+
+    <!-- DRAFT AREA: Teams + Hero Grid -->
+    <div class="draft-area">
+      <!-- Ally Team Panel -->
+      <div class="team-panel team-radiant">
+        <div class="team-panel-header">
+          <div class="dot"></div>
+          <h3>Your Team</h3>
+        </div>
+        <div class="team-picks" id="ally-picks"></div>
+      </div>
+
+      <!-- Hero Grid -->
+      <div class="hero-grid-container">
+        <div class="grid-controls">
+          <div class="search-wrapper">
+            <input type="text" class="search-box" id="search-box" placeholder="Search heroes...">
+          </div>
+          <button class="filter-btn str" data-attr="str">STR</button>
+          <button class="filter-btn agi" data-attr="agi">AGI</button>
+          <button class="filter-btn int" data-attr="int">INT</button>
+          <button class="filter-btn uni" data-attr="uni">UNI</button>
+        </div>
+        <div class="hero-grid" id="hero-grid"></div>
+      </div>
+
+      <!-- Enemy Team Panel -->
+      <div class="team-panel team-dire">
+        <div class="team-panel-header">
+          <div class="dot"></div>
+          <h3>Enemy Team</h3>
+        </div>
+        <div class="team-picks" id="enemy-picks"></div>
+      </div>
+    </div>
+
+    <!-- BOTTOM: Recommendations + Item Roadmap -->
+    <div class="bottom-panels">
+      <!-- AI Recommendations -->
+      <div class="recommendations-section">
+        <div class="section-header">
+          <span class="icon">🤖</span>
+          <h2>AI Hero Suggestions</h2>
+        </div>
+        <div class="rec-list" id="rec-list">
+          <div class="empty-state">
+            <div class="empty-icon">🎯</div>
+            <div class="empty-text">Start picking heroes to get<br>AI recommendations</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Item Roadmap -->
+      <div class="roadmap-section">
+        <div class="section-header">
+          <span class="icon">🗺️</span>
+          <h2>Item Roadmap</h2>
+        </div>
+        <div id="roadmap-hero-select" class="roadmap-hero-select"></div>
+        <div id="roadmap-content" class="roadmap-content visible">
+          <div class="empty-state">
+            <div class="empty-icon">🗺️</div>
+            <div class="empty-text">Pick allies to generate<br>item roadmaps</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Tooltip -->
+  <div class="tooltip" id="tooltip"></div>
+
+  <!-- App Script -->
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>
